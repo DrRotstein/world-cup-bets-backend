@@ -4,6 +4,7 @@
   "description": "Backend API for World Cup Bets — FIFA 2026 betting pools",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
