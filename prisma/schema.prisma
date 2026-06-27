@@ -45,3 +45,29 @@ model Membership {
   @@id([userId, groupId])
   @@map("memberships")
 }
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+
+  @@map("match_status")
+}
+
+model Match {
+  id            Int         @id
+  homeTeam      String
+  awayTeam      String
+  kickoffTime   DateTime
+  status        MatchStatus @default(SCHEDULED)
+  homeScore     Int?
+  awayScore     Int?
+  matchday      Int?
+  stage         String?
+  group         String?
+  lastSyncedAt  DateTime    @default(now())
+
+  @@index([status])
+  @@index([kickoffTime])
+  @@map("matches")
+}
