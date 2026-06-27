@@ -29,11 +29,10 @@ describe('MatchSyncService', () => {
       expect(matchesService.syncMatches).toHaveBeenCalledTimes(1);
     });
 
-    it('should not throw even if syncMatches fails', async () => {
+    it('should not throw when syncMatches rejects (error is logged)', async () => {
       matchesService.syncMatches.mockRejectedValue(new Error('sync failed'));
-      // The service should handle errors internally, but if it propagates,
-      // the cron decorator won't crash the app
-      await expect(syncService.handleSync()).rejects.toThrow();
+      // With try/catch in handleSync, errors are caught and logged — never propagated
+      await expect(syncService.handleSync()).resolves.toBeUndefined();
     });
   });
 });

@@ -14,10 +14,14 @@ export class MatchSyncService {
    */
   @Cron(CronExpression.EVERY_5_MINUTES)
   async handleSync(): Promise<void> {
-    this.logger.log('Starting scheduled match sync...');
-    const result = await this.matchesService.syncMatches();
-    this.logger.log(
-      `Scheduled sync finished: ${result.synced} synced, ${result.errors} errors`,
-    );
+    try {
+      this.logger.log('Starting scheduled match sync...');
+      const result = await this.matchesService.syncMatches();
+      this.logger.log(
+        `Scheduled sync finished: ${result.synced} synced, ${result.errors} errors`,
+      );
+    } catch (error) {
+      this.logger.error(`Scheduled sync crashed unexpectedly: ${String(error)}`);
+    }
   }
 }

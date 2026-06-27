@@ -29,6 +29,12 @@ export class FootballDataClient {
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('FOOTBALL_DATA_API_KEY', '');
 
+    if (!apiKey) {
+      this.logger.warn(
+        'FOOTBALL_DATA_API_KEY is not set. Match sync will fail until configured.',
+      );
+    }
+
     this.client = axios.create({
       baseURL: 'https://api.football-data.org/v4',
       headers: {
