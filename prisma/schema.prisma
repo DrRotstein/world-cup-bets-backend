@@ -11,13 +11,39 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
+  id          String       @id @default(uuid())
+  email       String       @unique
   displayName String
   avatarUrl   String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  createdGroups Group[]    @relation("GroupCreator")
 
   @@map("users")
+}
+
+model Group {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  inviteCode  String       @unique
+  createdBy   String
+  createdAt   DateTime     @default(now())
+  creator     User         @relation("GroupCreator", fields: [createdBy], references: [id])
+  memberships Membership[]
+
+  @@map("groups")
+}
+
+model Membership {
+  userId   String
+  groupId  String
+  joinedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id])
+  group    Group    @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+  @@map("memberships")
 }
 
 enum MatchStatus {
