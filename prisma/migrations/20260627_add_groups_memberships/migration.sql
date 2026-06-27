@@ -3,7 +3,7 @@ CREATE TABLE "groups" (
     "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
     "name" TEXT NOT NULL,
     "description" TEXT,
-    "inviteCode" TEXT NOT NULL DEFAULT gen_random_uuid(),
+    "inviteCode" TEXT NOT NULL,
     "createdBy" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

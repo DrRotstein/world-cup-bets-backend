@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { GroupsService } from './groups.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -20,7 +21,7 @@ describe('GroupsService', () => {
     id: 'group-1',
     name: 'World Cup Buddies',
     description: 'Our betting group',
-    inviteCode: 'abc-123-def',
+    inviteCode: 'Abc12xYz',
     createdBy: 'user-1',
     createdAt: new Date('2026-06-27T12:00:00Z'),
     creator: mockUser,
@@ -45,7 +46,6 @@ describe('GroupsService', () => {
         }),
       },
       membership: {
-        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ userId: 'user-2', groupId: 'group-1' }),
       },
     };
@@ -58,7 +58,7 @@ describe('GroupsService', () => {
   });
 
   describe('create', () => {
-    it('should create a group and add creator as member', async () => {
+    it('should create a group with short invite code and add creator as member', async () => {
       const result = await service.create('user-1', {
         name: 'World Cup Buddies',
         description: 'Our betting group',
@@ -66,16 +66,21 @@ describe('GroupsService', () => {
 
       expect(result).toEqual(mockGroup);
       expect(prisma.group.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           name: 'World Cup Buddies',
           description: 'Our betting group',
+          inviteCode: expect.any(String),
           createdBy: 'user-1',
           memberships: { create: { userId: 'user-1' } },
-        },
+        }),
         include: {
           creator: { select: { id: true, displayName: true, avatarUrl: true } },
         },
       });
+
+      // Verify invite code is short (8 chars)
+      const callArgs = prisma.group.create.mock.calls[0][0];
+      expect(callArgs.data.inviteCode).toHaveLength(8);
     });
   });
 
@@ -119,13 +124,13 @@ describe('GroupsService', () => {
   describe('joinByInviteCode', () => {
     it('should join a group via invite code', async () => {
       prisma.group.findUnique
-        .mockResolvedValueOnce(mockGroup) // first call: find by inviteCode
+        .mockResolvedValueOnce(mockGroup) // find by inviteCode
         .mockResolvedValueOnce({
           ...mockGroup,
           _count: { memberships: 4 },
-        }); // second call: return group after join
+        }); // return group after join
 
-      const result = await service.joinByInviteCode('user-2', 'abc-123-def');
+      const result = await service.joinByInviteCode('user-2', 'Abc12xYz');
       expect(result).toBeDefined();
       expect(prisma.membership.create).toHaveBeenCalledWith({
         data: { userId: 'user-2', groupId: 'group-1' },
@@ -139,15 +144,26 @@ describe('GroupsService', () => {
       );
     });
 
-    it('should throw ConflictException if already a member', async () => {
+    it('should throw ConflictException on P2002 unique constraint (race-safe)', async () => {
       prisma.group.findUnique.mockResolvedValue(mockGroup);
-      prisma.membership.findUnique.mockResolvedValue({
-        userId: 'user-2',
-        groupId: 'group-1',
-      });
+      prisma.membership.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+        }),
+      );
 
-      await expect(service.joinByInviteCode('user-2', 'abc-123-def')).rejects.toThrow(
+      await expect(service.joinByInviteCode('user-2', 'Abc12xYz')).rejects.toThrow(
         ConflictException,
+      );
+    });
+
+    it('should rethrow unexpected errors', async () => {
+      prisma.group.findUnique.mockResolvedValue(mockGroup);
+      prisma.membership.create.mockRejectedValue(new Error('DB connection lost'));
+
+      await expect(service.joinByInviteCode('user-2', 'Abc12xYz')).rejects.toThrow(
+        'DB connection lost',
       );
     });
   });
