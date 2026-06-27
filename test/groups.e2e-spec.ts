@@ -157,7 +157,7 @@ describe('Groups (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/groups/join/abc-123-def')
         .set('Authorization', `Bearer ${authToken}`)
-        .expect(201);
+        .expect(200);
 
       expect(response.body).toHaveProperty('id', 'group-1');
     });

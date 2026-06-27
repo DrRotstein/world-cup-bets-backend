@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { generateInviteCode } from './invite-code.util';
 
 @Injectable()
 export class GroupsService {
@@ -10,6 +12,7 @@ export class GroupsService {
       data: {
         name: data.name,
         description: data.description,
+        inviteCode: generateInviteCode(),
         createdBy: userId,
         memberships: {
           create: { userId },
@@ -74,18 +77,20 @@ export class GroupsService {
       throw new NotFoundException(`Invalid invite code`);
     }
 
-    // Check if already a member
-    const existing = await this.prisma.membership.findUnique({
-      where: { userId_groupId: { userId, groupId: group.id } },
-    });
-
-    if (existing) {
-      throw new ConflictException(`Already a member of this group`);
+    try {
+      await this.prisma.membership.create({
+        data: { userId, groupId: group.id },
+      });
+    } catch (error) {
+      // P2002: unique constraint violation — user is already a member
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(`Already a member of this group`);
+      }
+      throw error;
     }
-
-    await this.prisma.membership.create({
-      data: { userId, groupId: group.id },
-    });
 
     return this.prisma.group.findUnique({
       where: { id: group.id },

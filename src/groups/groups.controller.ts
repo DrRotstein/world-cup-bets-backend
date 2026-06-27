@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Param, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  UseGuards,
+  Req,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -62,6 +72,7 @@ export class GroupsController {
   }
 
   @Post('join/:inviteCode')
+  @HttpCode(HttpStatus.OK)
   async join(@Req() req: AuthenticatedRequest, @Param('inviteCode') inviteCode: string) {
     const group = await this.groupsService.joinByInviteCode(req.user.userId, inviteCode);
     return group;

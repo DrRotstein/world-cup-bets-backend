@@ -26,7 +26,7 @@ model Group {
   id          String       @id @default(uuid())
   name        String
   description String?
-  inviteCode  String       @unique @default(uuid())
+  inviteCode  String       @unique
   createdBy   String
   createdAt   DateTime     @default(now())
   creator     User         @relation("GroupCreator", fields: [createdBy], references: [id])
