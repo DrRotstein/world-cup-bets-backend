@@ -93,3 +93,26 @@ model Bet {
   @@index([groupId, matchId])
   @@map("bets")
 }
+
+enum ScoreType {
+  EXACT
+  DIFF
+  OUTCOME
+  WRONG
+
+  @@map("score_type")
+}
+
+model Score {
+  id       String    @id @default(uuid())
+  userId   String
+  groupId  String
+  matchId  Int
+  betId    String
+  points   Int
+  type     ScoreType
+
+  @@unique([userId, groupId, matchId])
+  @@index([groupId])
+  @@map("scores")
+}
