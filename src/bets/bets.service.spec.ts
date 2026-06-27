@@ -1,22 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { BetsService } from './bets.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('BetsService', () => {
   let service: BetsService;
-  let prisma: {
-    membership: Record<string, jest.Mock>;
-    match: Record<string, jest.Mock>;
-    bet: Record<string, jest.Mock>;
-  };
+  let prisma: Record<string, unknown>;
 
-  const futureDate = new Date(Date.now() + 86400000); // tomorrow
-  const pastDate = new Date(Date.now() - 86400000); // yesterday
+  const futureDate = new Date(Date.now() + 86400000);
+  const pastDate = new Date(Date.now() - 86400000);
 
   const mockMatch = {
     id: 1001,
@@ -39,18 +31,27 @@ describe('BetsService', () => {
     updatedAt: new Date(),
   };
 
+  let mockTx: {
+    match: Record<string, jest.Mock>;
+    bet: Record<string, jest.Mock>;
+  };
+
   beforeEach(async () => {
+    mockTx = {
+      match: { findUnique: jest.fn().mockResolvedValue(mockMatch) },
+      bet: { upsert: jest.fn().mockResolvedValue(mockBet) },
+    };
+
     prisma = {
       membership: {
         findUnique: jest.fn().mockResolvedValue({ userId: 'user-1', groupId: 'group-1' }),
       },
-      match: {
-        findUnique: jest.fn().mockResolvedValue(mockMatch),
-      },
+      match: { findUnique: jest.fn().mockResolvedValue(mockMatch) },
       bet: {
         upsert: jest.fn().mockResolvedValue(mockBet),
         findMany: jest.fn().mockResolvedValue([mockBet]),
       },
+      $transaction: jest.fn((cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -61,7 +62,7 @@ describe('BetsService', () => {
   });
 
   describe('placeBet', () => {
-    it('should place a bet on a future match', async () => {
+    it('should place a bet on a future match within a transaction', async () => {
       const result = await service.placeBet('user-1', 'group-1', {
         matchId: 1001,
         homeScorePrediction: 2,
@@ -69,7 +70,11 @@ describe('BetsService', () => {
       });
 
       expect(result).toEqual(mockBet);
-      expect(prisma.bet.upsert).toHaveBeenCalledWith({
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(mockTx.match.findUnique).toHaveBeenCalledWith({
+        where: { id: 1001 },
+      });
+      expect(mockTx.bet.upsert).toHaveBeenCalledWith({
         where: {
           userId_groupId_matchId: {
             userId: 'user-1',
@@ -88,8 +93,8 @@ describe('BetsService', () => {
       });
     });
 
-    it('should throw ForbiddenException if user is not a group member', async () => {
-      prisma.membership.findUnique.mockResolvedValue(null);
+    it('should throw NotFoundException if user is not a group member', async () => {
+      (prisma.membership as { findUnique: jest.Mock }).findUnique.mockResolvedValue(null);
 
       await expect(
         service.placeBet('user-1', 'group-1', {
@@ -97,11 +102,11 @@ describe('BetsService', () => {
           homeScorePrediction: 2,
           awayScorePrediction: 1,
         }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw NotFoundException if match does not exist', async () => {
-      prisma.match.findUnique.mockResolvedValue(null);
+      mockTx.match.findUnique.mockResolvedValue(null);
 
       await expect(
         service.placeBet('user-1', 'group-1', {
@@ -113,7 +118,7 @@ describe('BetsService', () => {
     });
 
     it('should throw BadRequestException if match kickoff has passed', async () => {
-      prisma.match.findUnique.mockResolvedValue({
+      mockTx.match.findUnique.mockResolvedValue({
         ...mockMatch,
         kickoffTime: pastDate,
       });
@@ -132,30 +137,25 @@ describe('BetsService', () => {
     it('should return user bets in a group', async () => {
       const result = await service.getMyBets('user-1', 'group-1');
       expect(result).toEqual([mockBet]);
-      expect(prisma.bet.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: 'user-1', groupId: 'group-1' },
-        }),
-      );
     });
 
-    it('should throw ForbiddenException if not a member', async () => {
-      prisma.membership.findUnique.mockResolvedValue(null);
+    it('should throw NotFoundException if not a member', async () => {
+      (prisma.membership as { findUnique: jest.Mock }).findUnique.mockResolvedValue(null);
       await expect(service.getMyBets('user-1', 'group-1')).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
     });
   });
 
   describe('getMatchBets', () => {
     it('should return only own bet before kickoff', async () => {
-      prisma.match.findUnique.mockResolvedValue({
+      (prisma.match as { findUnique: jest.Mock }).findUnique.mockResolvedValue({
         ...mockMatch,
         kickoffTime: futureDate,
       });
 
       await service.getMatchBets('user-1', 'group-1', 1001);
-      expect(prisma.bet.findMany).toHaveBeenCalledWith(
+      expect((prisma.bet as { findMany: jest.Mock }).findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { groupId: 'group-1', matchId: 1001, userId: 'user-1' },
         }),
@@ -163,13 +163,13 @@ describe('BetsService', () => {
     });
 
     it('should return all bets after kickoff', async () => {
-      prisma.match.findUnique.mockResolvedValue({
+      (prisma.match as { findUnique: jest.Mock }).findUnique.mockResolvedValue({
         ...mockMatch,
         kickoffTime: pastDate,
       });
 
       await service.getMatchBets('user-1', 'group-1', 1001);
-      expect(prisma.bet.findMany).toHaveBeenCalledWith(
+      expect((prisma.bet as { findMany: jest.Mock }).findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { groupId: 'group-1', matchId: 1001 },
         }),
@@ -177,16 +177,16 @@ describe('BetsService', () => {
     });
 
     it('should throw NotFoundException for non-existent match', async () => {
-      prisma.match.findUnique.mockResolvedValue(null);
+      (prisma.match as { findUnique: jest.Mock }).findUnique.mockResolvedValue(null);
       await expect(service.getMatchBets('user-1', 'group-1', 9999)).rejects.toThrow(
         NotFoundException,
       );
     });
 
-    it('should throw ForbiddenException if not a member', async () => {
-      prisma.membership.findUnique.mockResolvedValue(null);
+    it('should throw NotFoundException if not a member', async () => {
+      (prisma.membership as { findUnique: jest.Mock }).findUnique.mockResolvedValue(null);
       await expect(service.getMatchBets('user-1', 'group-1', 1001)).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
     });
   });

@@ -41,14 +41,24 @@ describe('BetsController', () => {
   });
 
   describe('POST /groups/:groupId/bets', () => {
-    it('should place a bet', async () => {
+    it('should place a bet and return shaped response', async () => {
       const result = await controller.placeBet(mockReq, 'group-1', {
         matchId: 1001,
         homeScorePrediction: 2,
         awayScorePrediction: 1,
       });
 
-      expect(result).toEqual(mockBet);
+      expect(result).toEqual({
+        id: 'bet-1',
+        matchId: 1001,
+        homeScorePrediction: 2,
+        awayScorePrediction: 1,
+        createdAt: mockBet.createdAt,
+        updatedAt: mockBet.updatedAt,
+      });
+      // Verify no userId/groupId leaked in response
+      expect(result).not.toHaveProperty('userId');
+      expect(result).not.toHaveProperty('groupId');
       expect(betsService.placeBet).toHaveBeenCalledWith('user-1', 'group-1', {
         matchId: 1001,
         homeScorePrediction: 2,

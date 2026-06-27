@@ -11,6 +11,7 @@ import {
 import { BetsService } from './bets.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlaceBetDto } from './dto/place-bet.dto';
+import { BetResponseDto } from './dto/bet-response.dto';
 import { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
@@ -27,12 +28,21 @@ export class BetsController {
     @Req() req: AuthenticatedRequest,
     @Param('groupId') groupId: string,
     @Body() dto: PlaceBetDto,
-  ) {
-    return this.betsService.placeBet(req.user.userId, groupId, {
+  ): Promise<BetResponseDto> {
+    const bet = await this.betsService.placeBet(req.user.userId, groupId, {
       matchId: dto.matchId,
       homeScorePrediction: dto.homeScorePrediction,
       awayScorePrediction: dto.awayScorePrediction,
     });
+
+    return {
+      id: bet.id,
+      matchId: bet.matchId,
+      homeScorePrediction: bet.homeScorePrediction,
+      awayScorePrediction: bet.awayScorePrediction,
+      createdAt: bet.createdAt,
+      updatedAt: bet.updatedAt,
+    };
   }
 
   @Get()

@@ -25,7 +25,7 @@ describe('Bets (e2e)', () => {
     updatedAt: new Date(),
   };
 
-  const mockPrismaService = {
+  const mockPrismaService: Record<string, unknown> = {
     user: {
       findUnique: jest.fn().mockResolvedValue({
         id: 'user-1',
@@ -64,6 +64,9 @@ describe('Bets (e2e)', () => {
     },
     $connect: jest.fn(),
     $disconnect: jest.fn(),
+    $transaction: jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
+      cb(mockPrismaService),
+    ),
     onModuleInit: jest.fn(),
     onModuleDestroy: jest.fn(),
   };
@@ -126,7 +129,9 @@ describe('Bets (e2e)', () => {
     });
 
     it('should return 400 for past match', async () => {
-      mockPrismaService.match.findUnique.mockResolvedValueOnce({
+      (
+        mockPrismaService.match as { findUnique: jest.Mock }
+      ).findUnique.mockResolvedValueOnce({
         id: 1001,
         kickoffTime: pastDate,
         status: 'FINISHED',
@@ -139,14 +144,16 @@ describe('Bets (e2e)', () => {
         .expect(400);
     });
 
-    it('should return 403 if not a group member', async () => {
-      mockPrismaService.membership.findUnique.mockResolvedValueOnce(null);
+    it('should return 404 if not a group member', async () => {
+      (
+        mockPrismaService.membership as { findUnique: jest.Mock }
+      ).findUnique.mockResolvedValueOnce(null);
 
       return request(app.getHttpServer())
         .post('/groups/group-1/bets')
         .set('Authorization', `Bearer ${authToken}`)
         .send({ matchId: 1001, homeScorePrediction: 2, awayScorePrediction: 1 })
-        .expect(403);
+        .expect(404);
     });
   });
 
